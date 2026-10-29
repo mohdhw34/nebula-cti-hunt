@@ -1,0 +1,47 @@
+# Optional one-shot compose. Prefers path mounts to leaf clones.
+# Copy .env.example → .env and set CTI_ROOT / HUNT_ROOT / tokens (never commit secrets).
+#
+# Leaf Dockerfiles may differ; this compose is a thin orchestrator for local loopback.
+# Prefer scripts/start-stack.ps1 on Windows when leaves already run via uvicorn/vite.
+
+services:
+  cti-core:
+    build:
+      context: ${CTI_ROOT:-../CTI}
+      dockerfile: services/cti-core/Dockerfile
+    environment:
+      CTI_HOST: 0.0.0.0
+      CTI_PORT: "8790"
+      CTI_API_TOKEN: ${CTI_API_TOKEN:-}
+      HUNT_PLATFORM_URL: http://hunt-platform:8788
+      HUNT_PLATFORM_TOKEN: ${NEBULA_HUMAN_TOKEN:-}
+    ports:
+      - "127.0.0.1:8790:8790"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  hunt-platform:
+    build:
+      context: ${HUNT_ROOT:-../../hunt-platform}
+      dockerfile: services/platform/Dockerfile
+    environment:
+      NEBULA_HOST: 0.0.0.0
+      NEBULA_HUMAN_TOKEN: ${NEBULA_HUMAN_TOKEN:?set NEBULA_HUMAN_TOKEN in .env}
+    ports:
+      - "127.0.0.1:8788:8788"
+
+  cti-console:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ${CTI_ROOT:-../CTI}/apps/cti-console:/app
+    environment:
+      VITE_HUNT_TOKEN: ${VITE_HUNT_TOKEN:-${NEBULA_HUMAN_TOKEN}}
+      VITE_HUNT_API_URL: http://127.0.0.1:8788
+      VITE_HUNT_PLATFORM_URL: http://127.0.0.1:8788
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - cti-core
+      - hunt-platform
