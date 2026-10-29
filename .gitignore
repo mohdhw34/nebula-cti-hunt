@@ -8,3 +8,6 @@ __pycache__/
 *.log
 .venv/
 venv/
+
+logs/
+
