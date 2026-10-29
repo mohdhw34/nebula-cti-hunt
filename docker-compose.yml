@@ -1,8 +1,6 @@
-# Optional one-shot compose. Prefers path mounts to leaf clones.
+# OPTIONAL draft compose — leaf Dockerfiles are not shipped yet.
+# Prefer scripts/start-stack.ps1 (uvicorn + Vite on loopback) until leaves add Dockerfiles.
 # Copy .env.example → .env and set CTI_ROOT / HUNT_ROOT / tokens (never commit secrets).
-#
-# Leaf Dockerfiles may differ; this compose is a thin orchestrator for local loopback.
-# Prefer scripts/start-stack.ps1 on Windows when leaves already run via uvicorn/vite.
 
 services:
   cti-core:

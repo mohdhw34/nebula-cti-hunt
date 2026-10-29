@@ -54,11 +54,7 @@ Stop:
 .\scripts\stop-stack.ps1
 ```
 
-Compose (optional; path-mounts leaves — requires Docker Desktop):
-
-```powershell
-docker compose up --build
-```
+Compose (optional draft): `docker-compose.yml` is a placeholder until leaf Dockerfiles exist. Use `scripts/start-stack.ps1` for now.
 
 ## Secrets
 
