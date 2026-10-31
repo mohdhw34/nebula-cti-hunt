@@ -21,10 +21,14 @@ Configure paths in `.env` (copy from `.env.example`). Defaults match Mohamed’s
 | cti-core | **8790** | http://127.0.0.1:8790/health |
 | hunt-api (platform) | **8788** | http://127.0.0.1:8788/v1/health |
 | intel-core (hunt leaf) | **8787** | http://127.0.0.1:8787/v1/health |
+| MISP peer (optional) | **8443** | https://127.0.0.1:8443 (`--profile misp`) |
+| Hermes MCP HTTP (optional) | **8791** | only if started / recorded by stack |
 
 `scripts/dev.sh` in hunt-platform starts **both** intel-core and hunt-api. Start scripts reuse listeners if a live soak / sibling agent already owns those ports.
 
 Console Hunt nav → `/cases`, `/detections`. Vite proxies `/hunt-api` → `:8788`. Set `VITE_HUNT_TOKEN` to the same value as hunt’s `NEBULA_HUMAN_TOKEN` (never commit). Offline / unreachable hunt shows a health chip on Cases — Intel still works.
+
+Optional peers live in the CTI leaf (`CTI_ROOT`): MISP via `scripts/misp-peer-up.*`, Postgres via `deploy/docker-compose.prod.yml --profile postgres`, Hermes via `scripts/hermes-mcp.*`.
 
 ## Quick start (one command)
 
@@ -50,7 +54,24 @@ Status / stop:
 ```powershell
 .\scripts\status.ps1
 .\scripts\stop-stack.ps1
+# Optional flags: -LeaveDocker  -PidsOnly  -ForceHermes
 ```
+
+```bash
+./scripts/status.sh
+./scripts/stop-stack.sh
+# Optional: STOP_LEAVE_DOCKER=1  STOP_PIDS_ONLY=1  STOP_FORCE_HERMES=1
+```
+
+`stop-stack` is idempotent. By default it stops:
+
+- recorded umbrella PIDs (`console`, `cti`, `hunt`, `intel`, `hermes`)
+- loopback listeners on **5173 / 8790 / 8788 / 8787**
+- MISP peer compose (`docker compose -f $CTI_ROOT/fixtures/docker-compose.misp.yml --profile misp down`)
+- Postgres profile compose (`docker compose -f $CTI_ROOT/deploy/docker-compose.prod.yml --profile postgres down`) when that leaf project was brought up
+- Hermes **:8791** only if recorded in `logs/pids.*` (or `-ForceHermes` / `STOP_FORCE_HERMES=1`)
+
+CTI leaf entry: `.\scripts\nebula.ps1 stop` / `./scripts/nebula.sh stop` (delegates to this umbrella).
 
 Reuse-only (coordinate with a live stack — do not start leaves):
 
