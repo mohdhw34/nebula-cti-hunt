@@ -1,22 +1,16 @@
 # OPTIONAL draft compose — leaf Dockerfiles are not shipped yet.
-# Prefer scripts/start-stack.ps1 (uvicorn + Vite on loopback) until leaves add Dockerfiles.
+# Prefer ./start.ps1 or ./start.sh (uvicorn + Vite on loopback) until leaves add Dockerfiles.
 # Copy .env.example → .env and set CTI_ROOT / HUNT_ROOT / tokens (never commit secrets).
 
 services:
-  cti-core:
+  intel-core:
     build:
-      context: ${CTI_ROOT:-../CTI}
-      dockerfile: services/cti-core/Dockerfile
+      context: ${HUNT_ROOT:-../../hunt-platform}
+      dockerfile: services/intel-core/Dockerfile
     environment:
-      CTI_HOST: 0.0.0.0
-      CTI_PORT: "8790"
-      CTI_API_TOKEN: ${CTI_API_TOKEN:-}
-      HUNT_PLATFORM_URL: http://hunt-platform:8788
-      HUNT_PLATFORM_TOKEN: ${NEBULA_HUMAN_TOKEN:-}
+      INTEL_HOST: 0.0.0.0
     ports:
-      - "127.0.0.1:8790:8790"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "127.0.0.1:8787:8787"
 
   hunt-platform:
     build:
@@ -27,6 +21,25 @@ services:
       NEBULA_HUMAN_TOKEN: ${NEBULA_HUMAN_TOKEN:?set NEBULA_HUMAN_TOKEN in .env}
     ports:
       - "127.0.0.1:8788:8788"
+    depends_on:
+      - intel-core
+
+  cti-core:
+    build:
+      context: ${CTI_ROOT:-../CTI}
+      dockerfile: services/cti-core/Dockerfile
+    environment:
+      CTI_HOST: 0.0.0.0
+      CTI_PORT: "8790"
+      CTI_API_TOKEN: ${CTI_API_TOKEN:-}
+      HUNT_PLATFORM_URL: http://hunt-platform:8788
+      HUNT_PLATFORM_TOKEN: ${NEBULA_HUMAN_TOKEN:-}
+      INTEL_CORE_URL: http://intel-core:8787
+    ports:
+      - "127.0.0.1:8790:8790"
+    depends_on:
+      - hunt-platform
+      - intel-core
 
   cti-console:
     image: node:20-alpine
