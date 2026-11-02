@@ -22,13 +22,13 @@ Configure paths in `.env` (copy from `.env.example`). Defaults match Mohamed’s
 | hunt-api (platform) | **8788** | http://127.0.0.1:8788/v1/health |
 | intel-core (hunt leaf) | **8787** | http://127.0.0.1:8787/v1/health |
 | MISP peer (optional) | **8443** | https://127.0.0.1:8443 (`--profile misp`) |
-| Hermes MCP HTTP (optional) | **8791** | only if started / recorded by stack |
+| Hermes MCP HTTP (**required**) | **8791** | http://127.0.0.1:8791/health (`CTI_ROOT/scripts/hermes-mcp.*`) |
 
-`scripts/dev.sh` in hunt-platform starts **both** intel-core and hunt-api. Start scripts reuse listeners if a live soak / sibling agent already owns those ports.
+`scripts/dev.sh` in hunt-platform starts **both** intel-core and hunt-api. Start scripts reuse listeners if a live soak / sibling agent already owns those ports. Hermes starts by default with the stack (HTTP on loopback `:8791`); set `HERMES_AGENT_TOKEN` in `.env` (or accept an ephemeral mint).
 
 Console Hunt nav → `/cases`, `/detections`. Vite proxies `/hunt-api` → `:8788`. Set `VITE_HUNT_TOKEN` to the same value as hunt’s `NEBULA_HUMAN_TOKEN` (never commit). Offline / unreachable hunt shows a health chip on Cases — Intel still works.
 
-Optional peers live in the CTI leaf (`CTI_ROOT`): MISP via `scripts/misp-peer-up.*`, Postgres via `deploy/docker-compose.prod.yml --profile postgres`, Hermes via `scripts/hermes-mcp.*`.
+Optional peers live in the CTI leaf (`CTI_ROOT`): MISP via `scripts/misp-peer-up.*`, Postgres via `deploy/docker-compose.prod.yml --profile postgres`. Hermes is required and started via `scripts/hermes-mcp.*`.
 
 ## Quick start (one command)
 
@@ -66,10 +66,11 @@ Status / stop:
 `stop-stack` is idempotent. By default it stops:
 
 - recorded umbrella PIDs (`console`, `cti`, `hunt`, `intel`, `hermes`)
-- loopback listeners on **5173 / 8790 / 8788 / 8787**
+- loopback listeners on **5173 / 8790 / 8788 / 8787 / 8791** (Hermes included)
 - MISP peer compose (`docker compose -f $CTI_ROOT/fixtures/docker-compose.misp.yml --profile misp down`)
 - Postgres profile compose (`docker compose -f $CTI_ROOT/deploy/docker-compose.prod.yml --profile postgres down`) when that leaf project was brought up
-- Hermes **:8791** only if recorded in `logs/pids.*` (or `-ForceHermes` / `STOP_FORCE_HERMES=1`)
+
+`-ForceHermes` / `STOP_FORCE_HERMES=1` remain accepted aliases (Hermes is already stopped by default).
 
 CTI leaf entry: `.\scripts\nebula.ps1 stop` / `./scripts/nebula.sh stop` (delegates to this umbrella).
 
@@ -88,6 +89,7 @@ Never commit tokens. Operator env only (umbrella `.env` is gitignored):
 
 - `NEBULA_HUMAN_TOKEN` / `VITE_HUNT_TOKEN` — hunt `X-Nebula-Token`
 - `CTI_API_TOKEN` / `VITE_CTI_API_TOKEN` — when cti-core auth enabled
+- `HERMES_AGENT_TOKEN` — Bearer for Hermes `POST /mcp` (required peer; minted ephemerally if unset)
 - Provider keys stay in each leaf’s own secrets file (`HUNT_NO_SECRETS=1` by default in start scripts)
 
 Scripts load `.env` into the process and pass Vite vars to the console child — they **do not** write `.env.local` into leaf checkouts (so sibling workers can own CTI/hunt trees safely).

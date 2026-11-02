@@ -1,6 +1,8 @@
-# Start (or reuse) intel-core :8787 + hunt-api :8788 + cti-core :8790 + cti-console :5173.
+# Start (or reuse) intel-core :8787 + hunt-api :8788 + cti-core :8790 + cti-console :5173
+# + Hermes MCP HTTP :8791 (required peer; CTI leaf scripts/hermes-mcp.*).
 # Loads umbrella .env into this process only. Never prints secret values.
 # Does not write into leaf working trees (sibling agents may own those checkouts).
+# Never connects to remote soak hosts (loopback only).
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $EnvFile = Join-Path $Root ".env"
@@ -20,6 +22,7 @@ Get-Content $EnvFile | ForEach-Object {
 $CtiRoot = if ($env:CTI_ROOT) { $env:CTI_ROOT } else { "C:\Users\MOHD\Desktop\Projects\CTI" }
 $HuntRoot = if ($env:HUNT_ROOT) { $env:HUNT_ROOT } else { "C:\Users\MOHD\hunt-platform" }
 $SkipStart = ($env:NEBULA_REUSE_ONLY -eq "1")
+$HermesPort = if ($env:HERMES_PORT -and $env:HERMES_PORT -match '^\d+$') { [int]$env:HERMES_PORT } else { 8791 }
 
 if (-not (Test-Path $CtiRoot)) { Write-Error "CTI_ROOT not found: $CtiRoot" }
 if (-not (Test-Path $HuntRoot)) { Write-Error "HUNT_ROOT not found: $HuntRoot" }
@@ -34,6 +37,15 @@ if (-not $env:INTEL_CORE_URL) { $env:INTEL_CORE_URL = "http://127.0.0.1:8787" }
 if (-not $env:HUNT_PLATFORM_TOKEN -and $env:NEBULA_HUMAN_TOKEN) {
   $env:HUNT_PLATFORM_TOKEN = $env:NEBULA_HUMAN_TOKEN
 }
+if (-not $env:CTI_CORE_URL) { $env:CTI_CORE_URL = "http://127.0.0.1:8790" }
+if (-not $env:HERMES_PERMISSION) { $env:HERMES_PERMISSION = "read_only" }
+# HTTP transport requires a Bearer token; mint ephemeral local soak token if unset (never printed).
+if (-not $env:HERMES_AGENT_TOKEN) {
+  $bytes = New-Object byte[] 32
+  [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+  $env:HERMES_AGENT_TOKEN = [Convert]::ToBase64String($bytes)
+  Write-Host "[..] HERMES_AGENT_TOKEN unset - minted ephemeral local soak token (not printed; set in .env to persist)"
+}
 
 $LogDir = Join-Path $Root "logs"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
@@ -42,7 +54,7 @@ $pids = @{}
 if (Test-Path $PidFile) {
   try {
     $prev = Get-Content $PidFile -Raw | ConvertFrom-Json
-    foreach ($k in @("intel", "hunt", "cti", "console")) {
+    foreach ($k in @("intel", "hunt", "cti", "console", "hermes")) {
       if ($prev.$k) { $pids[$k] = [int]$prev.$k }
     }
   } catch {
@@ -127,6 +139,35 @@ if (Test-Port 5173) {
   [void](Wait-Port 5173 45)
 }
 
+# Hermes MCP HTTP (required) — CTI leaf scripts/hermes-mcp.ps1; loopback only
+if (Test-Port $HermesPort) {
+  Write-Host ("[ok] Hermes MCP already on :{0}" -f $HermesPort)
+} elseif ($SkipStart) {
+  Write-Warning ("NEBULA_REUSE_ONLY=1 and :{0} down - not starting Hermes." -f $HermesPort)
+} else {
+  $hermesPs1 = Join-Path $CtiRoot "scripts\hermes-mcp.ps1"
+  if (-not (Test-Path $hermesPs1)) {
+    Write-Error ("Hermes required but missing CTI script: {0}" -f $hermesPs1)
+  }
+  # Wait for cti-core if we just started it (Hermes proxies to core).
+  if (-not (Test-Port 8790)) {
+    Write-Warning "cti-core :8790 not listening yet - Hermes will start anyway (proxies fail until core is up)."
+  }
+  Write-Host ("[..] starting Hermes MCP HTTP :{0} via CTI scripts/hermes-mcp.ps1" -f $HermesPort)
+  $hermesProc = Start-Process -FilePath "powershell.exe" `
+    -ArgumentList @(
+      "-NoProfile", "-ExecutionPolicy", "Bypass",
+      "-File", $hermesPs1, "-Mode", "http", "-Port", "$HermesPort"
+    ) `
+    -WorkingDirectory $CtiRoot -PassThru -WindowStyle Hidden `
+    -RedirectStandardOutput (Join-Path $LogDir "hermes.out.log") `
+    -RedirectStandardError (Join-Path $LogDir "hermes.err.log")
+  $pids["hermes"] = $hermesProc.Id
+  if (-not (Wait-Port $HermesPort 30)) {
+    Write-Warning ("Hermes did not bind :{0} within timeout - check logs/hermes.err.log" -f $HermesPort)
+  }
+}
+
 $pids | ConvertTo-Json | Set-Content $PidFile -Encoding UTF8
 
 Write-Host ""
@@ -135,6 +176,7 @@ Write-Host "  Console   http://127.0.0.1:5173"
 Write-Host "  cti-core  http://127.0.0.1:8790/health"
 Write-Host "  hunt-api  http://127.0.0.1:8788/v1/health"
 Write-Host "  intel     http://127.0.0.1:8787/v1/health"
+Write-Host ("  Hermes    http://127.0.0.1:{0}/health" -f $HermesPort)
 Write-Host "Logs: $LogDir"
 Write-Host "Health: .\scripts\status.ps1"
 & (Join-Path $PSScriptRoot "status.ps1")

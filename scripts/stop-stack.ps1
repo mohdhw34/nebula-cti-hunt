@@ -1,11 +1,11 @@
-# Stop Nebula umbrella stack: console, cti-core, hunt, intel, optional peers.
-# Default: recorded PIDs + loopback port owners for product ports + MISP/postgres compose down.
-# Hermes (:8791) only if recorded in pids.json or -ForceHermes.
+# Stop Nebula umbrella stack: console, cti-core, hunt, intel, Hermes, optional peers.
+# Default: recorded PIDs + loopback port owners for product ports (incl. Hermes :8791)
+# + MISP/postgres compose down.
 # Idempotent / safe when already stopped. Never prints secrets. Never touches remote hosts.
 param(
   [switch]$ForcePorts,   # legacy alias — port kill is now default; kept for callers
   [switch]$ForceHunt,    # legacy alias — hunt/intel ports included by default
-  [switch]$ForceHermes,  # also stop whatever owns :8791 even if not in pids.json
+  [switch]$ForceHermes,  # legacy alias — Hermes :8791 is stopped by default now
   [switch]$PidsOnly,     # only kill PIDs from logs/pids.json (no port / docker)
   [switch]$LeaveDocker   # skip MISP + postgres compose down
 )
@@ -30,7 +30,6 @@ if (Test-Path $EnvFile) {
 
 $CtiRoot = if ($env:CTI_ROOT) { $env:CTI_ROOT } else { "C:\Users\MOHD\Desktop\Projects\CTI" }
 
-$hadHermesPid = $false
 if (Test-Path $PidFile) {
   try {
     $pids = Get-Content $PidFile -Raw | ConvertFrom-Json
@@ -41,7 +40,6 @@ if (Test-Path $PidFile) {
     foreach ($name in @("console", "cti", "hunt", "intel", "hermes")) {
       $id = $pids.$name
       if ($id) {
-        if ($name -eq "hermes") { $hadHermesPid = $true }
         Write-Host "Stopping $name pid=$id"
         Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
       }
@@ -61,18 +59,14 @@ function Stop-PortOwner([int]$Port) {
   }
 }
 
-# Default: stop product listeners (ForcePorts/ForceHunt kept as no-ops / aliases).
+# Default: stop product listeners incl. Hermes (ForcePorts/ForceHunt/ForceHermes = aliases).
 if (-not $PidsOnly) {
-  foreach ($port in @(5173, 8790, 8788, 8787)) {
+  foreach ($port in @(5173, 8790, 8788, 8787, 8791)) {
     Stop-PortOwner $port
   }
-  # Hermes only when stack recorded it, or operator asked.
-  # Legacy -ForcePorts / -ForceHunt remain accepted (ports already stopped above).
   $null = $ForcePorts
   $null = $ForceHunt
-  if ($hadHermesPid -or $ForceHermes) {
-    Stop-PortOwner 8791
-  }
+  $null = $ForceHermes
 }
 
 function Stop-ComposeProfile {

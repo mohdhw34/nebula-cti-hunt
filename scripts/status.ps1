@@ -7,7 +7,7 @@ $checks = @(
   @{ Name = "hunt-api";    Port = 8788; Url = "http://127.0.0.1:8788/v1/health"; SkipTls = $false }
   @{ Name = "intel-core";  Port = 8787; Url = "http://127.0.0.1:8787/v1/health"; SkipTls = $false }
   @{ Name = "misp-peer";   Port = 8443; Url = "https://127.0.0.1:8443/";       SkipTls = $true }
-  @{ Name = "hermes-mcp";  Port = 8791; Url = "http://127.0.0.1:8791/";        SkipTls = $false }
+  @{ Name = "hermes-mcp";  Port = 8791; Url = "http://127.0.0.1:8791/health"; SkipTls = $false }
 )
 
 foreach ($c in $checks) {

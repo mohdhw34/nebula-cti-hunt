@@ -24,4 +24,4 @@ check cti-core    8790 "http://127.0.0.1:8790/health"
 check hunt-api    8788 "http://127.0.0.1:8788/v1/health"
 check intel-core  8787 "http://127.0.0.1:8787/v1/health"
 check misp-peer   8443 "https://127.0.0.1:8443/" 1
-check hermes-mcp  8791 "http://127.0.0.1:8791/"
+check hermes-mcp  8791 "http://127.0.0.1:8791/health"
