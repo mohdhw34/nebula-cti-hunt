@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# Stop Nebula umbrella stack: console, cti-core, hunt, intel, optional peers.
-# Default: recorded PIDs + loopback port owners + MISP/postgres compose down.
-# Hermes (:8791) only if recorded in pids.env or STOP_FORCE_HERMES=1.
+# Stop Nebula umbrella stack: console, cti-core, hunt, intel, Hermes, optional peers.
+# Default: recorded PIDs + loopback port owners (incl. Hermes :8791) + MISP/postgres compose down.
 # Idempotent / safe when already stopped. Never prints secrets. Never touches remote hosts.
 #
 # Env flags:
 #   STOP_PIDS_ONLY=1     only kill PIDs from logs/pids.env
 #   STOP_LEAVE_DOCKER=1  skip MISP + postgres compose down
-#   STOP_FORCE_HERMES=1  also stop :8791 even if not in pids.env
+#   STOP_FORCE_HERMES=1  legacy alias — Hermes :8791 is stopped by default now
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,8 +28,6 @@ if [[ "$CTI_ROOT" =~ ^[A-Za-z]:\\ ]]; then
   CTI_ROOT="/mnt/${drive}/${rest//'\'//}"
 fi
 
-had_hermes_pid=0
-
 stop_pid() {
   local label="$1" pid="$2"
   if [[ -n "${pid:-}" ]]; then
@@ -49,10 +46,7 @@ if [[ -f "$PID_FILE" ]]; then
   stop_pid cti_pid "${cti_pid:-}"
   stop_pid hunt_pid "${hunt_pid:-}"
   stop_pid intel_pid "${intel_pid:-}"
-  if [[ -n "${hermes_pid:-}" ]]; then
-    had_hermes_pid=1
-    stop_pid hermes_pid "$hermes_pid"
-  fi
+  stop_pid hermes_pid "${hermes_pid:-}"
   rm -f "$PID_FILE"
 else
   echo "No pids.env — nothing recorded by this umbrella."
@@ -80,12 +74,11 @@ stop_port() {
 }
 
 if [[ "${STOP_PIDS_ONLY:-0}" != "1" ]]; then
-  for port in 5173 8790 8788 8787; do
+  for port in 5173 8790 8788 8787 8791; do
     stop_port "$port"
   done
-  if [[ "$had_hermes_pid" -eq 1 || "${STOP_FORCE_HERMES:-0}" == "1" ]]; then
-    stop_port 8791
-  fi
+  # STOP_FORCE_HERMES kept as accepted no-op (Hermes always stopped above).
+  : "${STOP_FORCE_HERMES:=0}"
 fi
 
 stop_compose_profile() {
